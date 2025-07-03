@@ -7,19 +7,19 @@ import fitz  # PyMuPDF
 
 from . import models, schemas, database, auth
 
-# Create DB tables
+# Initialize DB
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI()
 
-# OAuth2 scheme to get token from Authorization header
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="signin")
-
-# Directory to save uploaded files
+# Upload directory
 UPLOAD_DIR = "uploaded_files"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Dependency to get DB session
+# Auth scheme
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="signin")
+
+# DB Dependency
 def get_db():
     db = database.SessionLocal()
     try:
@@ -27,6 +27,7 @@ def get_db():
     finally:
         db.close()
 
+# === Auth ===
 
 @app.post("/signup", response_model=schemas.Token)
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
@@ -52,10 +53,7 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
 def signin(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == form_data.username).first()
 
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    if not auth.verify_password(form_data.password, user.password):
+    if not user or not auth.verify_password(form_data.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = auth.create_access_token({"sub": user.username})
@@ -65,13 +63,11 @@ def signin(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depen
 @app.get("/me")
 def read_me(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     payload = auth.decode_access_token(token)
-    if payload is None:
+    if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    username = payload.get("sub")
-    user = db.query(models.User).filter(models.User.username == username).first()
-
-    if user is None:
+    user = db.query(models.User).filter(models.User.username == payload.get("sub")).first()
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     return {
@@ -80,6 +76,7 @@ def read_me(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
         "email": user.email
     }
 
+# === Upload File ===
 
 @app.post("/upload", response_model=schemas.DocumentOut)
 async def upload_document(
@@ -88,12 +85,11 @@ async def upload_document(
     db: Session = Depends(get_db)
 ):
     payload = auth.decode_access_token(token)
-    if payload is None:
+    if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    username = payload.get("sub")
-    user = db.query(models.User).filter(models.User.username == username).first()
-    if user is None:
+    user = db.query(models.User).filter(models.User.username == payload.get("sub")).first()
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     allowed_extensions = [".txt", ".pdf"]
@@ -125,8 +121,8 @@ async def upload_document(
 
     return document
 
-# --------------------------------------------
-#/ask endpoint (create QnA)
+# === Ask QnA ===
+
 @app.post("/ask", response_model=schemas.QnAOut)
 def ask_question(
     qna_in: schemas.QnACreate,
@@ -134,23 +130,21 @@ def ask_question(
     db: Session = Depends(get_db)
 ):
     payload = auth.decode_access_token(token)
-    if payload is None:
+    if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    username = payload.get("sub")
-    user = db.query(models.User).filter(models.User.username == username).first()
-    if user is None:
+    user = db.query(models.User).filter(models.User.username == payload.get("sub")).first()
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     document = db.query(models.Document).filter(
         models.Document.id == qna_in.document_id,
         models.Document.owner_id == user.id
     ).first()
-    if document is None:
+    if not document:
         raise HTTPException(status_code=404, detail="Document not found or not owned by user")
 
-    # Here, you would call your AI/LLM to get an answer.
-    # For now, just return a dummy answer for demo:
+    # Simulate AI response
     answer = f"Dummy answer to: {qna_in.question}"
 
     qna = models.QnA(
@@ -165,7 +159,8 @@ def ask_question(
 
     return qna
 
-#Get QnA history for user and document
+# === QnA History ===
+
 @app.get("/documents/{document_id}/qna", response_model=list[schemas.QnAOut])
 def get_qna_history(
     document_id: int,
@@ -173,19 +168,18 @@ def get_qna_history(
     db: Session = Depends(get_db)
 ):
     payload = auth.decode_access_token(token)
-    if payload is None:
+    if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    username = payload.get("sub")
-    user = db.query(models.User).filter(models.User.username == username).first()
-    if user is None:
+    user = db.query(models.User).filter(models.User.username == payload.get("sub")).first()
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     document = db.query(models.Document).filter(
         models.Document.id == document_id,
         models.Document.owner_id == user.id
     ).first()
-    if document is None:
+    if not document:
         raise HTTPException(status_code=404, detail="Document not found or not owned by user")
 
     qnas = db.query(models.QnA).filter(

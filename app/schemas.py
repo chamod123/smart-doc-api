@@ -1,5 +1,6 @@
-# app/schemas.py
 from pydantic import BaseModel, EmailStr
+
+# --- User Schemas ---
 
 class UserCreate(BaseModel):
     username: str
@@ -14,6 +15,8 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+# --- Document Schemas ---
+
 class DocumentOut(BaseModel):
     id: int
     filename: str
@@ -21,7 +24,7 @@ class DocumentOut(BaseModel):
     owner_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True  # ✅ Pydantic v2 update
 
 # --- QnA Schemas ---
 
@@ -39,4 +42,4 @@ class QnAOut(QnABase):
     document_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True  # ✅ Pydantic v2 update
