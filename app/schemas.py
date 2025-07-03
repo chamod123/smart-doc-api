@@ -1,4 +1,3 @@
- 
 # app/schemas.py
 from pydantic import BaseModel, EmailStr
 
@@ -15,7 +14,6 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
-
 class DocumentOut(BaseModel):
     id: int
     filename: str
@@ -25,3 +23,20 @@ class DocumentOut(BaseModel):
     class Config:
         orm_mode = True
 
+# --- QnA Schemas ---
+
+class QnABase(BaseModel):
+    question: str
+    answer: str
+
+class QnACreate(BaseModel):
+    question: str
+    document_id: int
+
+class QnAOut(QnABase):
+    id: int
+    user_id: int
+    document_id: int
+
+    class Config:
+        orm_mode = True
